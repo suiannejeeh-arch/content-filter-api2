@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from typing import List
 import re
 import tldextract
-from mangum import Mangum
 
 # ----- App FastAPI -----
 app = FastAPI(title="API de Controle Parental Avançada")
@@ -120,6 +119,3 @@ def atualizar_config(novas_config: ParentalControlSettings):
     global settings
     settings = novas_config
     return {"status": "Configurações atualizadas com sucesso!"}
-
-# ----- Handler AWS Lambda (Vercel) -----
-handler = Mangum(app)
