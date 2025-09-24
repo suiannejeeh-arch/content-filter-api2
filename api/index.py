@@ -143,3 +143,6 @@ def atualizar_config(novas_config: ParentalControlSettings):
     settings = novas_config
     return {"status": "Configurações atualizadas com sucesso!"}
 
+@app.get("/")
+def root():
+    return {"message": "🚀 API de Controle Parental está online! Acesse /docs para explorar os endpoints."}
