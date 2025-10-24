@@ -1,24 +1,28 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import re
 import tldextract
 from datetime import datetime, timedelta
 import secrets
+import uuid
 import logging
+
+# ----- Configuração de logs -----
 logging.basicConfig(level=logging.INFO)
 
-# ----- App FastAPI -----
+# ----- Inicialização do app -----
 app = FastAPI(title="API de Controle Parental Avançada")
 
 # ----- CORS -----
 origins = [
-    "http://127.0.0.1:8000",             
-    "http://localhost:3000",             
-    "http://localhost:5173",            
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://localhost:5173",
     "https://paideferro.vercel.app",
-    "https://content-filter-api3.vercel.app"  
+    "https://content-filter-api3.vercel.app"
 ]
 
 app.add_middleware(
@@ -29,12 +33,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ----- Autenticação básica via Token -----
+security = HTTPBearer()
+SECURE_TOKEN = "CHAVE_SUPER_SECRETA_123"  # Substitua por um valor seguro
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
+    token = credentials.credentials
+    if token != SECURE_TOKEN:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    return True
+
 # ----- Healthcheck -----
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# ----- Modelos -----
+# ----- Modelos principais -----
 class ContentCheck(BaseModel):
     text: str
 
@@ -61,7 +75,7 @@ class ParentalControlSettings(BaseModel):
     permissions: Permissions
     restrictions: Restrictions
 
-# ----- Configurações iniciais -----
+# ----- Configuração inicial -----
 settings = ParentalControlSettings(
     blocked_categories=["pornografia", "conteudo_adulto", "drogas"],
     blocked_keywords=["sex", "porn", "drugs", "adult"],
@@ -76,7 +90,7 @@ settings = ParentalControlSettings(
     restrictions=Restrictions(max_daily_usage="4h", block_unapproved_sites=True)
 )
 
-# ----- Blacklist simples -----
+# ----- Palavras bloqueadas -----
 BLACKLIST = [
     "sexo", "pornografia", "nudez", "xxx", "putaria",
     "caralho", "porra", "fuder", "buceta", "boquete",
@@ -87,16 +101,14 @@ BLACKLIST = [
     "hentai", "erotico", "camgirls"
 ]
 
-# ----- Funções de verificação -----
+# ----- Funções auxiliares -----
 def check_blacklist(text: str):
     text_lower = text.lower()
     blocked_words = [word for word in BLACKLIST if word in text_lower]
-
     extracted = tldextract.extract(text_lower)
     domain = extracted.domain
     if domain in BLACKLIST:
         blocked_words.append(domain)
-
     return list(set(blocked_words))
 
 def is_time_allowed(day: str, time: str) -> bool:
@@ -106,7 +118,6 @@ def is_time_allowed(day: str, time: str) -> bool:
     h, m = map(int, time.split(":"))
     sh, sm = map(int, schedule_item.start_hour.split(":"))
     eh, em = map(int, schedule_item.end_hour.split(":"))
-
     after_start = h > sh or (h == sh and m >= sm)
     before_end = h < eh or (h == eh and m <= em)
     return schedule_item.allowed and after_start and before_end
@@ -121,7 +132,7 @@ def is_url_allowed(url: str) -> bool:
             return False
     return True
 
-# ----- Endpoints -----
+# ----- Endpoints principais -----
 @app.post("/check-content/")
 def check_content(data: ContentCheck):
     blocked_words = check_blacklist(data.text)
@@ -130,7 +141,7 @@ def check_content(data: ContentCheck):
     return {"allowed": True, "reason": "Conteúdo permitido"}
 
 @app.get("/verificar_acesso")
-def verificar_acesso(categoria: str = None, url: str = None, dia: str = None, horario: str = None):
+def verificar_acesso(categoria: Optional[str] = None, url: Optional[str] = None, dia: Optional[str] = None, horario: Optional[str] = None):
     if dia is None or horario is None:
         raise HTTPException(status_code=400, detail="Dia e horário são obrigatórios")
     if not is_time_allowed(dia, horario):
@@ -142,7 +153,7 @@ def verificar_acesso(categoria: str = None, url: str = None, dia: str = None, ho
     return {"acesso": "permitido"}
 
 @app.post("/atualizar_config")
-def atualizar_config(novas_config: ParentalControlSettings):
+def atualizar_config(novas_config: ParentalControlSettings, _: bool = Security(verify_token)):
     global settings
     settings = novas_config
     return {"status": "Configurações atualizadas com sucesso!"}
@@ -150,22 +161,20 @@ def atualizar_config(novas_config: ParentalControlSettings):
 @app.get("/")
 def root():
     return {"message": "🚀 API de Controle Parental está online! Acesse /docs para explorar os endpoints."}
-from datetime import datetime, timedelta
-import secrets
 
-# ----- Modelos adicionais -----
+# ----- Modelos de pareamento -----
 class Parent(BaseModel):
-    id: str
+    id: str = str(uuid.uuid4())
     nome: str
-    email: str
+    email: str  # Apenas para cadastro, nunca retornado publicamente
 
 class Device(BaseModel):
     id: str
     nome: str
-    sistema: str  # "android" ou "ios"
+    sistema: str
     parent_id: str
     pareado_em: datetime
-    ultimo_heartbeat: datetime | None = None
+    ultimo_heartbeat: Optional[datetime] = None
     ativo: bool = True
 
 class PairCode(BaseModel):
@@ -174,25 +183,25 @@ class PairCode(BaseModel):
     expires_at: datetime
     usado: bool = False
 
-# ----- Banco em memória (simples por enquanto) -----
+# ----- Bancos em memória -----
 pais_db = []
 dispositivos_db = []
 codigos_db = []
 
-# ----- Endpoint: gerar código de pareamento -----
+# ----- Gerar código de pareamento -----
 @app.post("/gerar_codigo_pareamento")
-def gerar_codigo_pareamento(parent_id: str):
-    code = secrets.token_hex(3).upper()  # ex: 'A1B2C3'
+def gerar_codigo_pareamento(parent_id: str, _: bool = Security(verify_token)):
+    code = secrets.token_hex(3).upper()
     expires_at = datetime.utcnow() + timedelta(minutes=10)
     codigo = PairCode(code=code, parent_id=parent_id, expires_at=expires_at)
     codigos_db.append(codigo)
     return {"codigo": code, "expira_em": expires_at}
 
-# ----- Endpoint: parear dispositivo -----
+# ----- Parear dispositivo -----
 class ParingRequest(BaseModel):
     codigo: str
     nome_dispositivo: str
-    sistema: str  # android / ios
+    sistema: str
 
 @app.post("/parear_dispositivo")
 def parear_dispositivo(req: ParingRequest):
@@ -214,7 +223,7 @@ def parear_dispositivo(req: ParingRequest):
     codigo.usado = True
     return {"status": "pareado", "device_id": device_id}
 
-# ----- Endpoint: heartbeat (dispositivo ativo) -----
+# ----- Heartbeat (dispositivo ativo) -----
 @app.post("/heartbeat/{device_id}")
 def heartbeat(device_id: str):
     device = next((d for d in dispositivos_db if d.id == device_id), None)
@@ -223,8 +232,18 @@ def heartbeat(device_id: str):
     device.ultimo_heartbeat = datetime.utcnow()
     return {"status": "ok", "ultimo_heartbeat": device.ultimo_heartbeat}
 
-# ----- Endpoint: listar dispositivos do pai -----
+# ----- Listar dispositivos (dados seguros) -----
 @app.get("/listar_dispositivos/{parent_id}")
-def listar_dispositivos(parent_id: str):
+def listar_dispositivos(parent_id: str, _: bool = Security(verify_token)):
     lista = [d for d in dispositivos_db if d.parent_id == parent_id]
-    return {"dispositivos": lista}
+    return {
+        "dispositivos": [
+            {
+                "nome": d.nome,
+                "sistema": d.sistema,
+                "ativo": d.ativo,
+                "pareado_em": d.pareado_em,
+                "ultimo_heartbeat": d.ultimo_heartbeat
+            } for d in lista
+        ]
+    }
