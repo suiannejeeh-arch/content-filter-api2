@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Security
+from fastapi import FastAPI, HTTPException, Security, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -12,26 +12,47 @@ import logging
 
 # ----- Configuração de logs -----
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ----- Inicialização do app -----
 app = FastAPI(title="API de Controle Parental Avançada")
 
-# ----- CORS -----
+# ----- CORS (configuração completa) -----
 origins = [
     "http://127.0.0.1:8000",
     "http://localhost:3000",
     "http://localhost:5173",
     "https://paideferro.vercel.app",
-    "https://content-filter-api3.vercel.app"
+    "https://content-filter-api3.vercel.app",
+    "https://https://pai-de-ferro.lovable.app/",  
+    "https://lovable.app"        
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept"],
+    expose_headers=["Content-Length", "X-Custom-Header"],
 )
+
+# Middleware extra (log e resposta a preflight OPTIONS)
+@app.middleware("http")
+async def log_requests_and_handle_options(request: Request, call_next):
+    if request.method == "OPTIONS":
+        # Trata o preflight manualmente (para evitar Failed to fetch)
+        response = app.response_class(status_code=200)
+        response.headers["Access-Control-Allow-Origin"] = request.headers.get("origin", "*")
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Requested-With, Accept"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+
+    logger.info(f"{request.method} {request.url}")
+    response = await call_next(request)
+    return response
 
 # ----- Autenticação básica via Token -----
 security = HTTPBearer()
@@ -166,7 +187,7 @@ def root():
 class Parent(BaseModel):
     id: str = str(uuid.uuid4())
     nome: str
-    email: str  # Apenas para cadastro, nunca retornado publicamente
+    email: str
 
 class Device(BaseModel):
     id: str
@@ -232,7 +253,7 @@ def heartbeat(device_id: str):
     device.ultimo_heartbeat = datetime.utcnow()
     return {"status": "ok", "ultimo_heartbeat": device.ultimo_heartbeat}
 
-# ----- Listar dispositivos (dados seguros) -----
+# ----- Listar dispositivos -----
 @app.get("/listar_dispositivos/{parent_id}")
 def listar_dispositivos(parent_id: str, _: bool = Security(verify_token)):
     lista = [d for d in dispositivos_db if d.parent_id == parent_id]
