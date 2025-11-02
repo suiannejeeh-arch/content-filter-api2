@@ -17,25 +17,24 @@ logger = logging.getLogger(__name__)
 # ----- Inicialização do app -----
 app = FastAPI(title="API de Controle Parental Avançada")
 
-# ----- CORS (configuração completa) -----
+from fastapi.middleware.cors import CORSMiddleware
+
 origins = [
     "http://127.0.0.1:8000",
     "http://localhost:3000",
     "http://localhost:5173",
     "https://paideferro.vercel.app",
     "https://content-filter-api3.vercel.app",
-    "https://https://pai-de-ferro.lovable.app/",  
-    "https://lovable.app"        
+    "https://pai-de-ferro.lovable.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=None,
+    allow_origin_regex="https://.*\\.lovable\\.app",  # permite qualquer subdomínio da Lovable
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept"],
-    expose_headers=["Content-Length", "X-Custom-Header"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Middleware extra (log e resposta a preflight OPTIONS)
