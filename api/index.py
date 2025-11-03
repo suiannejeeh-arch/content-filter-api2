@@ -24,6 +24,8 @@ app = FastAPI(title="API de Controle Parental Avançada")
 # --------------------------------------------------
 # 🔹 Configuração CORS (corrigido para Vercel + Lovable)
 # --------------------------------------------------
+from fastapi.middleware.cors import CORSMiddleware
+
 origins = [
     "http://127.0.0.1:8000",
     "http://localhost:3000",
@@ -36,11 +38,12 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://.*\.lovable\.app",  # permite qualquer subdomínio da Lovable
+    allow_origin_regex="https://.*\\.lovable\\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Middleware extra (para preflight OPTIONS)
 @app.middleware("http")
