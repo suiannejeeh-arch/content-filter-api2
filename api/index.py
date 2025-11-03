@@ -19,43 +19,42 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------
 # 🔹 Inicialização do app
 # --------------------------------------------------
-app = FastAPI(title="API de Controle Parental Avançada")
-description="API para filtragem de conteúdo e pareamento de dispositivos",
+app = FastAPI(
+    title="API de Controle Parental Avançada",
+    description="API para filtragem de conteúdo e pareamento de dispositivos",
     version="1.0.0"
 )
 
 # --------------------------------------------------
-# 🔹 Configuração CORS (corrigido para Vercel + Lovable)
+# 🔹 Configuração CORS (compatível Lovable + Vercel)
 # --------------------------------------------------
-from fastapi.middleware.cors import CORSMiddleware
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "https://lovable.app",
+    "https://*.lovable.app",
+    "https://lovableproject.com",
+    "https://*.lovableproject.com",
+    "https://paideferro.vercel.app",
+    "https://content-filter-api3.vercel.app",
+    "https://pai-de-ferro.lovable.app"
+]
 
-origins =  "https://lovable.app",
-        "https://*.lovable.app",
-        "https://lovableproject.com",
-        "https://*.lovableproject.com",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "https://paideferro.vercel.app",
-        "https://content-filter-api3.vercel.app",
-        "https://pai-de-ferro.lovable.app"
-    ],
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_origin_regex="https://.*\\.lovable(app|project)\\.com",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=[
-        "Content-Type",
-        "Authorization",
-        "Accept",
-        "Origin",
-        "User-Agent",
-        "X-Requested-With"
-    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
     expose_headers=["*"],
     max_age=3600
 )
 
-
-# Middleware extra (para preflight OPTIONS)
+# --------------------------------------------------
+# 🔹 Middleware extra (tratamento de OPTIONS)
+# --------------------------------------------------
 @app.middleware("http")
 async def handle_options(request: Request, call_next):
     if request.method == "OPTIONS":
@@ -75,7 +74,7 @@ async def handle_options(request: Request, call_next):
 # 🔹 Autenticação
 # --------------------------------------------------
 security = HTTPBearer()
-SECURE_TOKEN = "CHAVE_SUPER_SECRETA_123"  # Substitua por algo seguro
+SECURE_TOKEN = "CHAVE_SUPER_SECRETA_123"  # ⚠️ Troque para algo seguro
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     token = credentials.credentials
@@ -242,7 +241,6 @@ class PairCode(BaseModel):
     expires_at: datetime
     usado: bool = False
 
-# Bancos em memória
 pais_db = []
 dispositivos_db = []
 codigos_db = []
