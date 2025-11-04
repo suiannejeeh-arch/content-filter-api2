@@ -26,55 +26,50 @@ app = FastAPI(
 )
 
 # --------------------------------------------------
-# 🔹 Configuração CORS (compatível Lovable + Vercel)
+# 🔹 Configuração CORS (corrigido para Vercel + Lovable)
 # --------------------------------------------------
 origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
+    "http://localhost",
     "http://127.0.0.1:5173",
-    "https://lovable.app",
-    "https://*.lovable.app",
-    "https://lovableproject.com",
-    "https://*.lovableproject.com",
+    "http://localhost:5173",
     "https://paideferro.vercel.app",
     "https://content-filter-api3.vercel.app",
-    "https://pai-de-ferro.lovable.app"
+    "https://pai-de-ferro.lovable.app",
+    "https://lovable.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex="https://.*\\.lovable(app|project)\\.com",
+    allow_origin_regex=r"https://.*\.lovable\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600
 )
 
-# --------------------------------------------------
-# 🔹 Middleware extra (tratamento de OPTIONS)
-# --------------------------------------------------
+# Middleware extra (para preflight OPTIONS e logs)
 @app.middleware("http")
 async def handle_options(request: Request, call_next):
     if request.method == "OPTIONS":
         response = app.response_class(status_code=200)
-        origin = request.headers.get("origin")
-        if origin:
-            response.headers["Access-Control-Allow-Origin"] = origin
+        origin = request.headers.get("origin", "*")
+        response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Requested-With, Accept"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         return response
 
     logger.info(f"{request.method} {request.url}")
-    return await call_next(request)
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = request.headers.get("origin", "*")
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 # --------------------------------------------------
 # 🔹 Autenticação
 # --------------------------------------------------
 security = HTTPBearer()
-SECURE_TOKEN = "CHAVE_SUPER_SECRETA_123"  # ⚠️ Troque para algo seguro
+SECURE_TOKEN = "CHAVE_SUPER_SECRETA_123"
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     token = credentials.credentials
