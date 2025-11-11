@@ -29,7 +29,8 @@ app = FastAPI(
 # 🔹 Configuração CORS (corrigido para Vercel + Lovable)
 # --------------------------------------------------
 origins = [
-    "https://id-preview--23b54587-e1fd-4bb0-883a-74a5e14d21f0.lovable.app
+    "https://23b54587-e1fd-4bb0-883a-74a5e14d21f0.lovableproject.com",
+    "https://id-preview--23b54587-e1fd-4bb0-883a-74a5e14d21f0.lovable.app",
     "http://localhost",
     "http://127.0.0.1:5173",
     "http://localhost:5173",
@@ -47,6 +48,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Middleware extra (para preflight OPTIONS e logs)
 @app.middleware("http")
